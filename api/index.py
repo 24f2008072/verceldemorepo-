@@ -15,7 +15,8 @@ app.add_middleware(
 )
 
 # Telemetry sample bundled into the function so no runtime file access is needed.
-TELEMETRY = [{"region":"apac","service":"recommendations","latency_ms":223.28,"uptime_pct":98.677,"timestamp":20250301},{"region":"apac","service":"checkout","latency_ms":221.32,"uptime_pct":98.563,"timestamp":20250302},{"region":"apac","service":"payments","latency_ms":139.19,"uptime_pct":97.473,"timestamp":20250303},{"region":"apac","service":"support","latency_ms":140.07,"uptime_pct":97.692,"timestamp":20250304},{"region":"apac","service":"payments","latency_ms":111.91,"uptime_pct":97.471,"timestamp":20250305},{"region":"apac","service":"checkout","latency_ms":159.42,"uptime_pct":97.557,"timestamp":20250306},{"region":"apac","service":"analytics","latency_ms":192.05,"uptime_pct":97.356,"timestamp":20250307},{"region":"apac","service":"recommendations","latency_ms":205.18,"uptime_pct":98.095,"timestamp":20250308},{"region":"apac","service":"catalog","latency_ms":181.11,"uptime_pct":97.78,"timestamp":20250309},{"region":"apac","service":"analytics","latency_ms":213.52,"uptime_pct":98.862,"timestamp":20250310},{"region":"apac","service":"support","latency_ms":190.24,"uptime_pct":98.582,"timestamp":20250311},{"region":"apac","service":"payments","latency_ms":184.49,"uptime_pct":98.642,"timestamp":20250312},{"region":"emea","service":"support","latency_ms":184.53,"uptime_pct":99.225,"timestamp":20250301},{"region":"emea","service":"analytics","latency_ms":161.59,"uptime_pct":97.408,"timestamp":20250302},{"region":"emea","service":"support","latency_ms":180.92,"uptime_pct":97.753,"timestamp":20250303},{"region":"emea","service":"payments","latency_ms":193.89,"uptime_pct":97.619,"timestamp":20250304},{"region":"emea","service":"payments","latency_ms":129.93,"uptime_pct":98.604,"timestamp":20250305},{"region":"emea","service":"analytics","latency_ms":176.91,"uptime_pct":97.89,"timestamp":20250306},{"region":"emea","service":"checkout","latency_ms":196.23,"uptime_pct":98.376,"timestamp":20250307},{"region":"emea","service":"support","latency_ms":180.74,"uptime_pct":98.135,"timestamp":20250308},{"region":"emea","service":"catalog","latency_ms":160.98,"uptime_pct":99.3,"timestamp":20250309},{"region":"emea","service":"payments","latency_ms":232.47,"uptime_pct":99.235,"timestamp":20250310},{"region":"emea","service":"analytics","latency_ms":169.89,"uptime_pct":99.282,"timestamp":20250311},{"region":"emea","service":"support","latency_ms":188.78,"uptime_pct":97.167,"timestamp":20250312},{"region":"amer","service":"catalog","latency_ms":164.2,"uptime_pct":98.309,"timestamp":20250301},{"region":"amer","service":"checkout","latency_ms":181,"uptime_pct":98.916,"timestamp":20250302},{"region":"amer","service":"support","latency_ms":197.31,"uptime_pct":97.644,"timestamp":20250303},{"region":"amer","service":"analytics","latency_ms":198.89,"uptime_pct":97.188,"timestamp":20250304},{"region":"amer","service":"support","latency_ms":216.14,"uptime_pct":97.18,"timestamp":20250305},{"region":"amer","service":"analytics","latency_ms":211.13,"uptime_pct":99.081,"timestamp":20250306},{"region":"amer","service":"analytics","latency_ms":188.83,"uptime_pct":97.49,"timestamp":20250307},{"region":"amer","service":"payments","latency_ms":140.54,"uptime_pct":97.787,"timestamp":20250308},{"region":"amer","service":"recommendations","latency_ms":185.96,"uptime_pct":97.344,"timestamp":20250309},{"region":"amer","service":"checkout","latency_ms":146.71,"uptime_pct":97.523,"timestamp":20250310},{"region":"amer","service":"catalog","latency_ms":149.77,"uptime_pct":98.785,"timestamp":20250311},{"region":"amer","service":"analytics","latency_ms":240.85,"uptime_pct":98.638,"timestamp":20250312}]
+TELEMETRY = [{"region":"apac","service":"recommendations","latency_ms":223.28,"uptime_pct":98.677,"timestamp":20250301},{"region":"apac","service":"checkout","latency_ms":221.32,"uptime_pct":98.563,"timestamp":20250302},{"region":"apac","service":"support","latency_ms":245.1,"uptime_pct":97.823,"timestamp":20250303},{"region":"amer","service":"recommendations","latency_ms":187.9,"uptime_pct":99.31,"timestamp":20250301},{"region":"amer","service":"checkout","latency_ms":174.55,"uptime_pct":99.472,"timestamp":20250302},{"region":"amer","service":"support","latency_ms":196.23,"uptime_pct":99.008,"timestamp":20250303},{"region":"emea","service":"recommendations","latency_ms":212.64,"uptime_pct":98.912,"timestamp":20250301},{"region":"emea","service":"checkout","latency_ms":208.77,"uptime_pct":99.113,"timestamp":20250302},{"region":"emea","service":"support","latency_ms":219.88,"uptime_pct":98.741,"timestamp":20250303}]
+
 
 def percentile(values, p):
     """Linear-interpolated percentile (same convention as numpy.percentile)."""
@@ -32,12 +33,16 @@ def percentile(values, p):
     fraction = position - lower
     return float(values[lower] + (values[upper] - values[lower]) * fraction)
 
+
 @app.post("/")
 async def latency_metrics(request: Request):
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Request body must be valid JSON"}, status_code=400)
+
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Request body must be a JSON object"}, status_code=400)
 
     regions = body.get("regions")
     threshold = body.get("threshold_ms", 180)
@@ -55,7 +60,7 @@ async def latency_metrics(request: Request):
                 "avg_latency": None,
                 "p95_latency": None,
                 "avg_uptime": None,
-                "breaches": 0
+                "breaches": 0,
             }
             continue
 
@@ -65,10 +70,11 @@ async def latency_metrics(request: Request):
             "avg_latency": sum(latencies) / len(latencies),
             "p95_latency": percentile(latencies, 95),
             "avg_uptime": sum(uptimes) / len(uptimes),
-            "breaches": sum(1 for value in latencies if value > threshold)
+            "breaches": sum(1 for value in latencies if value > threshold),
         }
 
     return result
+
 
 @app.options("/")
 async def options_root():
